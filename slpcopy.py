@@ -1,12 +1,14 @@
+import sys
 from gooey import Gooey, GooeyParser
 import dataclasses
 import humanize
 import pathlib
 import psutil
 import shutil
-import sys
+import io
+import os
+#sys.stdout = io.StringIO()
 from colored import stylize, attr, fg
-
 
 FAT32='FAT32'
 SLP_EXTENSION='*.slp'
@@ -17,7 +19,7 @@ class Drive:
     name: str
     mountpoint: str
     size: int
-    files: list[pathlib.Path] = dataclasses.field(default_factory=list)
+    files: list
 
     def human_size(self):
         return humanize.naturalsize(self.size)
@@ -36,12 +38,23 @@ def find_slp_files(device):
 def replay_folder_name(num):
     return "Setup {:03d}".format(num)
 
+def resource_path(path):
+    if getattr(sys, "frozen", False):
+        # The application is frozen
+        datadir = os.path.dirname(sys.executable)
+    else:
+        # The application is not frozen
+        # Change this bit to match where you store your data files:
+        datadir = os.path.dirname(__file__)
+    return os.path.join(datadir, path)
+
+
 @Gooey(program_name="SlpCopy",
        progress_regex=r"^progress: (?P<current>\d+)/(?P<total>\d+)$",
        progress_expr="current / total * 100",
        richtext_controls=True,
        hide_progress_msg=True,
-       image_dir='img',
+       image_dir=resource_path('img'),
        timing_options = {
          'show_time_remaining': True,
          'hide_time_remaining_on_complete': True,
@@ -68,7 +81,7 @@ def main():
         slp_files = find_slp_files(device)
         if slp_files:
             print(stylize('Found {} slp replay files.'.format(len(slp_files)), fg('light_blue') + attr('bold')))
-            device.files.extend(slp_files)
+            device.files = slp_files
         else:
             print(stylize('Found no slp replay files.', fg('light_gray')))
         print()
