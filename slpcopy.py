@@ -7,7 +7,6 @@ import psutil
 import shutil
 import io
 import os
-#sys.stdout = io.StringIO()
 from colored import stylize, attr, fg
 
 FAT32='FAT32'
