@@ -1,4 +1,15 @@
 import sys
+try:
+    sys.stdout.write('\n')
+    sys.stdout.flush()
+except AttributeError:
+    # dummy class to export a "do nothing methods", expected methods to be called (read, write, flush, close) 
+    class Dummy:
+        def __getattr__(*args):
+            return lambda *args: None
+
+    for x in ('stdout', 'stderr', 'stdin'):
+        setattr(sys, x, Dummy())
 from gooey import Gooey, GooeyParser
 import dataclasses
 import humanize
@@ -7,11 +18,10 @@ import psutil
 import shutil
 import io
 import os
-import wmi
-from colored import stylize, attr, fg
+from colored import stylize, attr, fg # depends on stdout
 try:
     import win32com.client
-except:
+except BaseException:
     pass
 
 FAT32 = 'FAT32'
@@ -32,12 +42,15 @@ class Drive:
     def display_name(self):
         return self.name if self.name else self.device
 
+
 def get_win32_drive_names():
     if 'win32com.client' not in sys.modules:
-        return {} 
+        return {}
     objWMIService = win32com.client.Dispatch('WbemScripting.SWbemLocator')
-    objSWbemServices = objWMIService.ConnectServer('.', 'root\cimv2')
-    return {item.DeviceId + '\\': item.VolumeName for item in objSWbemServices.ExecQuery("SELECT * from Win32_LogicalDisk")}
+    objSWbemServices = objWMIService.ConnectServer('.', 'root\\cimv2')
+    return {
+        item.DeviceId +
+        '\\': item.VolumeName for item in objSWbemServices.ExecQuery("SELECT * from Win32_LogicalDisk")}
 
 
 def get_drives():
@@ -122,6 +135,7 @@ def get_numbered_folder_path(output_path, cur_dir=0):
         cur_dir += 1
     return folder_path, cur_dir
 
+
 def get_folder_path(output_path, folder_name):
     folder_path = pathlib.Path(output_path).joinpath(folder_name)
     if not folder_path.exists():
@@ -132,6 +146,7 @@ def get_folder_path(output_path, folder_name):
 @Gooey(program_name='SlpCopy',
        progress_regex=r'^progress: (?P<current>\d+)/(?P<total>\d+)$',
        progress_expr='current / total * 100',
+       requires_shell=False,
        richtext_controls=True,
        hide_progress_msg=True,
        image_dir=resource_path('img'),
@@ -153,18 +168,28 @@ def main():
         '--keep_after_copy',
         metavar='Remove after copy',
         help='Delete original *.slp files off thumbdrives after succesfully copying to your machine.',
-        action='store_false', widget='BlockCheckbox')
+        action='store_false',
+        widget='BlockCheckbox')
     # Value of the variable is the inverse of the selection in the checkbox.
     parser.add_argument(
         '--no_use_custom_drive_names',
         metavar='Use custom drive names',
         help='Copy *.slp files into a folder with each thumbdrive\'s custom name (if applicable). If unchecked a new folder will be created for each drive (e.g. "Setup 001")',
-        action='store_false', widget='BlockCheckbox')
+        action='store_false',
+        widget='BlockCheckbox')
 
     args = parser.parse_args()
     print(stylize('===== Settings =====', fg('light_gray')))
-    print(stylize('Remove after copy: {}'.format(not args.keep_after_copy), fg('light_gray')))
-    print(stylize('Use custom drive names: {}'.format(not args.no_use_custom_drive_names), fg('light_gray')))
+    print(
+        stylize(
+            'Remove after copy: {}'.format(
+                not args.keep_after_copy),
+            fg('light_gray')))
+    print(
+        stylize(
+            'Use custom drive names: {}'.format(
+                not args.no_use_custom_drive_names),
+            fg('light_gray')))
     print()
 
     drives = get_drives()
@@ -191,8 +216,8 @@ def main():
         if not args.no_use_custom_drive_names and drive.name:
             folder_path = get_folder_path(output_path, drive.name)
         else:
-            folder_path, cur_dir = get_numbered_folder_path(output_path, cur_dir)
-
+            folder_path, cur_dir = get_numbered_folder_path(
+                output_path, cur_dir)
 
         successful_copies = 0
         for f in drive.files:
