@@ -7,15 +7,21 @@ import psutil
 import shutil
 import io
 import os
+import wmi
 from colored import stylize, attr, fg
+try:
+    import win32com.client
+except:
+    pass
 
-FAT32='FAT32'
-SLP_EXTENSION='*.slp'
+FAT32 = 'FAT32'
+SLP_EXTENSION = '*.slp'
 
 
 @dataclasses.dataclass
 class Drive:
     name: str
+    device: str
     mountpoint: str
     size: int
     files: list
@@ -23,22 +29,63 @@ class Drive:
     def human_size(self):
         return humanize.naturalsize(self.size)
 
+    def display_name(self):
+        return self.name if self.name else self.device
 
-def get_devices():
-    return [Drive(
-        name=device.device,
-        mountpoint=device.mountpoint,
-        size=psutil.disk_usage(device.mountpoint).total
-        ) for device in psutil.disk_partitions() if device.fstype==FAT32]
+def get_win32_drive_names():
+    if 'win32com.client' not in sys.modules:
+        return {} 
+    objWMIService = win32com.client.Dispatch('WbemScripting.SWbemLocator')
+    objSWbemServices = objWMIService.ConnectServer('.', 'root\cimv2')
+    return {item.DeviceId + '\\': item.VolumeName for item in objSWbemServices.ExecQuery("SELECT * from Win32_LogicalDisk")}
 
-def find_slp_files(device):
-    return list(pathlib.Path(device.mountpoint).rglob(SLP_EXTENSION))
+
+def get_drives():
+    drive_names = get_win32_drive_names()
+    drives = []
+    for device in psutil.disk_partitions():
+        if device.fstype != FAT32:
+            continue
+        drive = Drive(
+            device=device.device,
+            name=drive_names.get(device.mountpoint, ''),
+            mountpoint=device.mountpoint,
+            size=psutil.disk_usage(
+                device.mountpoint).total,
+            files=[])
+
+        print(
+            stylize(
+                'Searching device {} ({})'.format(
+                    drive.display_name(),
+                    drive.human_size()),
+                fg('light_blue')))
+        slp_files = find_slp_files(drive)
+        if slp_files:
+            print(
+                stylize(
+                    'Found {} slp replay files.'.format(
+                        len(slp_files)),
+                    fg('light_blue') +
+                    attr('bold')))
+            drive.files = slp_files
+        else:
+            print(stylize('Found no slp replay files.', fg('light_gray')))
+        print()
+        drives.append(drive)
+    return drives
+
+
+def find_slp_files(drive):
+    return list(pathlib.Path(drive.mountpoint).rglob(SLP_EXTENSION))
+
 
 def replay_folder_name(num):
-    return "Setup {:03d}".format(num)
+    return 'Setup {:03d}'.format(num)
+
 
 def resource_path(path):
-    if getattr(sys, "frozen", False):
+    if getattr(sys, 'frozen', False):
         # The application is frozen
         datadir = os.path.dirname(sys.executable)
     else:
@@ -48,68 +95,132 @@ def resource_path(path):
     return os.path.join(datadir, path)
 
 
-@Gooey(program_name="SlpCopy",
-       progress_regex=r"^progress: (?P<current>\d+)/(?P<total>\d+)$",
-       progress_expr="current / total * 100",
+def copy_and_delete_original(target_file, destination_folder, delete_original):
+    try:
+        shutil.copy(target_file, destination_folder)
+    except IOError as e:
+        print(
+            stylize(
+                'Unable to copy file {}. {}'.format(
+                    target_file,
+                    e),
+                fg('red') +
+                attr('bold')))
+        return False
+    if delete_original:
+        target_file.unlink()
+    return True
+
+
+def get_numbered_folder_path(output_path, cur_dir=0):
+    while True:
+        folder_path = pathlib.Path(output_path).joinpath(
+            replay_folder_name(cur_dir))
+        if not folder_path.exists():
+            folder_path.mkdir(parents=True, exist_ok=False)
+            break
+        cur_dir += 1
+    return folder_path, cur_dir
+
+def get_folder_path(output_path, folder_name):
+    folder_path = pathlib.Path(output_path).joinpath(folder_name)
+    if not folder_path.exists():
+        folder_path.mkdir(parents=True, exist_ok=False)
+    return folder_path
+
+
+@Gooey(program_name='SlpCopy',
+       progress_regex=r'^progress: (?P<current>\d+)/(?P<total>\d+)$',
+       progress_expr='current / total * 100',
        richtext_controls=True,
        hide_progress_msg=True,
        image_dir=resource_path('img'),
-       timing_options = {
-         'show_time_remaining': True,
-         'hide_time_remaining_on_complete': True,
+       default_size=(610, 610),
+       timing_options={
+           'show_time_remaining': True,
+           'hide_time_remaining_on_complete': True,
        })
 def main():
-    parser = GooeyParser(description="blorppppp's *.slp copy tool. Copies all *.slp files from thumbdrives onto your machine.")
-    parser.add_argument('output_path', metavar='Output Path', help='The directory to copy *.slp files into.', widget="DirChooser")
+    parser = GooeyParser(
+        description='blorppppp\'s *.slp copy tool. Copies all *.slp files from thumbdrives onto your machine.')
+    parser.add_argument(
+        'output_path',
+        metavar='Output Path',
+        help='The directory to copy *.slp files into.',
+        widget='DirChooser')
     # Value of the variable is the inverse of the selection in the checkbox.
-    parser.add_argument('--keep_after_copy', metavar='Remove after copy', help='Delete original *.slp files off thumbdrives after succesfully copying to your machine.', action="store_false")
-    
-    args = parser.parse_args()
+    parser.add_argument(
+        '--keep_after_copy',
+        metavar='Remove after copy',
+        help='Delete original *.slp files off thumbdrives after succesfully copying to your machine.',
+        action='store_false', widget='BlockCheckbox')
+    # Value of the variable is the inverse of the selection in the checkbox.
+    parser.add_argument(
+        '--no_use_custom_drive_names',
+        metavar='Use custom drive names',
+        help='Copy *.slp files into a folder with each thumbdrive\'s custom name (if applicable). If unchecked a new folder will be created for each drive (e.g. "Setup 001")',
+        action='store_false', widget='BlockCheckbox')
 
-    devices = get_devices()
-    if devices: 
-        print(stylize('Searching {} connected devices for *.slp files.'.format(len(devices)), attr('bold')))
+    args = parser.parse_args()
+    print(stylize('===== Settings =====', fg('light_gray')))
+    print(stylize('Remove after copy: {}'.format(not args.keep_after_copy), fg('light_gray')))
+    print(stylize('Use custom drive names: {}'.format(not args.no_use_custom_drive_names), fg('light_gray')))
+    print()
+
+    drives = get_drives()
+    if drives:
+        print(stylize(
+            'Searching {} connected drives for *.slp files.'.format(len(drives)), attr('bold')))
     else:
-        print(stylize('No conncted devices to search.', fg('dark_gray') + attr('bold')))
+        print(
+            stylize(
+                'No conncted drives to search.',
+                fg('dark_gray') +
+                attr('bold')))
 
     output_path = pathlib.Path(args.output_path)
 
-    cur_dir = 0
-    for device in devices:
-        print(stylize('Searching device {} ({})'.format(device.name, device.human_size()), fg('light_blue')))
-        slp_files = find_slp_files(device)
-        if slp_files:
-            print(stylize('Found {} slp replay files.'.format(len(slp_files)), fg('light_blue') + attr('bold')))
-            device.files = slp_files
-        else:
-            print(stylize('Found no slp replay files.', fg('light_gray')))
-        print()
-
-    total_files = sum(len(d.files) for d in devices)
+    total_files = sum(len(d.files) for d in drives)
     i = 0
-    if not total_files: 
+    cur_dir = 0
+    if not total_files:
         print(stylize('No files to copy.', fg('dark_gray') + attr('bold')))
-    for device in devices:
-        if not device.files:
+    for drive in drives:
+        if not drive.files:
             continue
-        while True:
-            folder_name = pathlib.Path(output_path).joinpath(replay_folder_name(cur_dir))
-            if not folder_name.exists():
-                folder_name.mkdir(parents=True, exist_ok=False)
-                break
-            cur_dir += 1
-        for f in device.files:
-            print(f)
-            print("progress: {}/{}".format(i + 1, total_files))
+        if not args.no_use_custom_drive_names and drive.name:
+            folder_path = get_folder_path(output_path, drive.name)
+        else:
+            folder_path, cur_dir = get_numbered_folder_path(output_path, cur_dir)
+
+
+        successful_copies = 0
+        for f in drive.files:
+            print('progress: {}/{}'.format(i + 1, total_files))
             sys.stdout.flush()
-            shutil.copy(f, folder_name)
-            if not args.keep_after_copy:
-                f.unlink()
+            if copy_and_delete_original(
+                    f, folder_path, delete_original=not args.keep_after_copy):
+                successful_copies += 1
             i += 1
-        print(stylize('Copied {} slp replay files from to {}'.format(len(device.files), device.name, folder_name.resolve()), fg('green')))
-        if not args.keep_after_copy:
-            print(stylize('Deleted {} replay files from {}'.format(len(device.files), device.name), fg('green')))
-    print(stylize('Complete.', fg('green') + attr('bold')))
+        if successful_copies > 0:
+            print(
+                stylize(
+                    'Copied {} slp replay files from {} to {}'.format(
+                        successful_copies,
+                        drive.display_name(),
+                        folder_path.resolve()),
+                    fg('green')))
+            if not args.keep_after_copy:
+                print(
+                    stylize(
+                        'Deleted {} replay files from {}'.format(
+                            successful_copies,
+                            drive.display_name()),
+                        fg('green')))
+        if successful_copies != len(drive.files):
+            print(stylize('Unable to copy {} files.'.format(
+                len(drive.files) - successful_copies), fg('red') + attr('bold')))
+    print(stylize('Complete.\n\n', fg('green') + attr('bold')))
 
 
 if __name__ == '__main__':
