@@ -1,7 +1,9 @@
 import sys
+in_terminal = False
 try:
     sys.stdout.write('\n')
     sys.stdout.flush()
+    in_terminal = True
 except AttributeError:
     # dummy class to export a "do nothing methods", expected methods to be called (read, write, flush, close) 
     class Dummy:
@@ -146,14 +148,14 @@ def get_folder_path(output_path, folder_name):
 @Gooey(program_name='SlpCopy',
        progress_regex=r'^progress: (?P<current>\d+)/(?P<total>\d+)$',
        progress_expr='current / total * 100',
-       requires_shell=False,
+       requires_shell=in_terminal,
        richtext_controls=True,
        hide_progress_msg=True,
        image_dir=resource_path('img'),
        default_size=(610, 610),
        timing_options={
-           'show_time_remaining': True,
-           'hide_time_remaining_on_complete': True,
+           'show_time_remaining': not in_terminal,
+           'hide_time_remaining_on_complete': not in_terminal,
        })
 def main():
     parser = GooeyParser(
