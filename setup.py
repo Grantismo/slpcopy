@@ -6,21 +6,9 @@ gooey_root = os.path.dirname(gooey.__file__)
 gooey_languages = (os.path.join(gooey_root, 'languages'), 'gooey/languages')
 gooey_images = (os.path.join(gooey_root, 'images'), 'gooey/images')
 
-#"sys",
-#"gooey",
-#"dataclasses",
-#"humanize",
-#"pathlib",
-#"psutil",
-#"shutil",
-#"io",
-#"os",
-#"colored",
-#"win32com"],
-
 # Dependencies are automatically detected, but it might need fine tuning.
 build_exe_options = {
-    "packages": [],
+    "packages": ["win32com.client"],
     "excludes": [],
     "include_files": [
         gooey_languages,
