@@ -31,6 +31,31 @@ Works well with a multiport usb hub:
 
 <img src="https://i.imgur.com/tDVmnau.jpg" width="300">
 
+## CLI Usage
+
+```
+python3 slpcopy.py --ignore-gooey --help
+
+usage: slpcopy.py [-h] [--remove_after_copy] [--use_custom_drive_names]
+                  Output Path
+
+blorppppp's *.slp copy tool. Copies all *.slp files from thumbdrives onto your
+machine.
+
+positional arguments:
+  Output Path           The directory to copy *.slp files into.
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --remove_after_copy   Delete original *.slp files off thumbdrives after
+                        succesfully copying to your machine.
+  --use_custom_drive_names
+                        Copy *.slp files into a folder with each thumbdrive's
+                        custom name (if applicable). If unchecked a new folder
+                        will be created for each drive (e.g. "Setup 001")
+```
+<img src="https://imgur.com/ornd613.jpg" width="900">
+
 ## Tips
 ### How to set up Slippi replay recording on your Wii
 https://www.youtube.com/watch?v=KiJZX-GUyak&ab_channel=YashichiSSBM
