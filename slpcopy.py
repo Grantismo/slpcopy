@@ -25,8 +25,12 @@ try:
     import win32com.client
 except BaseException:
     pass
+try:
+    import dbus
+except BaseException:
+    pass
 
-FAT32 = 'FAT32'
+FS_TYPES = set(['fat16', 'fat32', 'vfat'])
 SLP_EXTENSION = '*.slp'
 
 
@@ -45,25 +49,40 @@ class Drive:
         return self.name if self.name else self.device
 
 
-def get_win32_drive_names():
-    if 'win32com.client' not in sys.modules:
-        return {}
-    objWMIService = win32com.client.Dispatch('WbemScripting.SWbemLocator')
-    objSWbemServices = objWMIService.ConnectServer('.', 'root\\cimv2')
-    return {
-        item.DeviceId +
-        '\\': item.VolumeName for item in objSWbemServices.ExecQuery("SELECT * from Win32_LogicalDisk")}
+def get_drive_names():
+    if 'win32com.client' in sys.modules:
+        wmi_service = win32com.client.Dispatch('WbemScripting.SWbemLocator')
+        swbem_serivces = wmi_service.ConnectServer('.', 'root\\cimv2')
+        return { 
+            item.DeviceId +
+            '\\': item.VolumeName for item in swbem_serivces.ExecQuery("SELECT * from Win32_LogicalDisk")}
+    # Linux
+    if 'dbus' in sys.modules:
+        bus = dbus.SystemBus()
+        ud_manager_obj = bus.get_object('org.freedesktop.UDisks2', '/org/freedesktop/UDisks2')
+        ud_manager = dbus.Interface(ud_manager_obj, 'org.freedesktop.DBus.ObjectManager')
+        device_to_names = {}
+        for k, v in ud_manager.GetManagedObjects().items():
+            drive_info = v.get('org.freedesktop.UDisks2.Block', {})
+            label = drive_info.get('IdLabel', '')
+            if label:
+                device = bytearray(drive_info.get('Device')).replace(b'\x00', b'').decode('utf-8')
+                device_to_names[device] = label
+        return device_to_names
+    return {}
+
+
 
 
 def get_drives():
-    drive_names = get_win32_drive_names()
+    drive_names = get_drive_names()
     drives = []
     for device in psutil.disk_partitions():
-        if device.fstype != FAT32:
+        if device.fstype.lower() not in FS_TYPES or device.mountpoint == '/boot/efi':
             continue
         drive = Drive(
             device=device.device,
-            name=drive_names.get(device.mountpoint, ''),
+            name=drive_names.get(device.device, ''),
             mountpoint=device.mountpoint,
             size=psutil.disk_usage(
                 device.mountpoint).total,
@@ -165,19 +184,17 @@ def main():
         metavar='Output Path',
         help='The directory to copy *.slp files into.',
         widget='DirChooser')
-    # Value of the variable is the inverse of the selection in the checkbox.
     parser.add_argument(
-        '--keep_after_copy',
+        '--remove_after_copy',
         metavar='Remove after copy',
         help='Delete original *.slp files off thumbdrives after succesfully copying to your machine.',
-        action='store_false',
+        action='store_true',
         widget='BlockCheckbox')
-    # Value of the variable is the inverse of the selection in the checkbox.
     parser.add_argument(
-        '--no_use_custom_drive_names',
+        '--use_custom_drive_names',
         metavar='Use custom drive names',
         help='Copy *.slp files into a folder with each thumbdrive\'s custom name (if applicable). If unchecked a new folder will be created for each drive (e.g. "Setup 001")',
-        action='store_false',
+        action='store_true',
         widget='BlockCheckbox')
 
     args = parser.parse_args()
@@ -185,12 +202,12 @@ def main():
     print(
         stylize(
             'Remove after copy: {}'.format(
-                not args.keep_after_copy),
+                args.remove_after_copy),
             fg('light_gray')))
     print(
         stylize(
             'Use custom drive names: {}'.format(
-                not args.no_use_custom_drive_names),
+                args.use_custom_drive_names),
             fg('light_gray')))
     print()
 
@@ -215,7 +232,7 @@ def main():
     for drive in drives:
         if not drive.files:
             continue
-        if not args.no_use_custom_drive_names and drive.name:
+        if args.use_custom_drive_names and drive.name:
             folder_path = get_folder_path(output_path, drive.name)
         else:
             folder_path, cur_dir = get_numbered_folder_path(
@@ -226,7 +243,7 @@ def main():
             print('progress: {}/{}'.format(i + 1, total_files))
             sys.stdout.flush()
             if copy_and_delete_original(
-                    f, folder_path, delete_original=not args.keep_after_copy):
+                    f, folder_path, delete_original=args.remove_after_copy):
                 successful_copies += 1
             i += 1
         if successful_copies > 0:
@@ -237,7 +254,7 @@ def main():
                         drive.display_name(),
                         folder_path.resolve()),
                     fg('green')))
-            if not args.keep_after_copy:
+            if args.remove_after_copy:
                 print(
                     stylize(
                         'Deleted {} replay files from {}'.format(
