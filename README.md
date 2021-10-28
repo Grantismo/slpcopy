@@ -10,7 +10,8 @@ Tool to copy all *.slp files (from [Slippi](https://github.com/project-slippi/pr
 * Organizes *.slp replay files by thumbdrive in the output directory.
 * Optionally deletes *.slp replay files after copying. 
 * Optionally uses custom drive names in output directory.
-
+* Full Windows & Linux support. OSX should also work if you run the python script directly, but this is untested.
+* 
 <img src="https://i.imgur.com/zAGVtME.png" width="200">
 <img src="https://i.imgur.com/VZsv6hr.png" width="600">
 
