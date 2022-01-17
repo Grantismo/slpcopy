@@ -1,17 +1,18 @@
 import sys
 in_terminal = False
-try:
-    sys.stdout.write('\n')
-    sys.stdout.flush()
-    in_terminal = True
-except AttributeError:
-    # dummy class to export a "do nothing methods", expected methods to be called (read, write, flush, close) 
-    class Dummy:
-        def __getattr__(*args):
-            return lambda *args: None
+#try:
+#    sys.stdout.write('\n')
+#    sys.stdout.flush()
+#    in_terminal = True
+#except AttributeError:
+#    # dummy class to export a "do nothing methods", expected methods to be called (read, write, flush, close) 
+#    class Dummy:
+#        def __getattr__(*args):
+#            return lambda *args: None
+#
+#    for x in ('stdout', 'stderr', 'stdin'):
+#        setattr(sys, x, Dummy())
 
-    for x in ('stdout', 'stderr', 'stdin'):
-        setattr(sys, x, Dummy())
 from gooey import Gooey, GooeyParser
 import dataclasses
 import humanize
@@ -167,7 +168,7 @@ def get_folder_path(output_path, folder_name):
 @Gooey(program_name='SlpCopy',
        progress_regex=r'^progress: (?P<current>\d+)/(?P<total>\d+)$',
        progress_expr='current / total * 100',
-       requires_shell=in_terminal,
+       requires_shell=False, #in_terminal,
        richtext_controls=True,
        hide_progress_msg=True,
        image_dir=resource_path('img'),
