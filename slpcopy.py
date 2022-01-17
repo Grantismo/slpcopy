@@ -30,7 +30,7 @@ try:
 except BaseException:
     pass
 
-FS_TYPES = set(['fat16', 'fat32', 'vfat'])
+FS_TYPES = set(['fat16', 'fat32', 'vfat', 'fat'])
 SLP_EXTENSION = '*.slp'
 
 
@@ -226,7 +226,7 @@ def main():
 
     total_files = sum(len(d.files) for d in drives)
     i = 0
-    cur_dir = 0
+    cur_dir = 1
     if not total_files:
         print(stylize('No files to copy.', fg('dark_gray') + attr('bold')))
     for drive in drives:
