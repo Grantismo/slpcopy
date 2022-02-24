@@ -1,7 +1,7 @@
 # slpcopy
 Tool to copy all *.slp files (from [Slippi](https://github.com/project-slippi/project-slippi) tournament captures) from attached thumbdrives. Useful for TOs running a SSBM tournament. 
 
-![Screenshot](https://i.imgur.com/pFlVgeQ.png)
+![Screenshot](https://imgur.com/6boYxzE.png)
 
 ## Features
 
@@ -10,6 +10,7 @@ Tool to copy all *.slp files (from [Slippi](https://github.com/project-slippi/pr
 * Organizes *.slp replay files by thumbdrive in the output directory.
 * Optionally deletes *.slp replay files after copying. 
 * Optionally uses custom drive names in output directory.
+* **[New!] Optionally renames files on copy to a more human readable format (e.g. "Game_20211025T160457.slp" --> "20211025T160457 - Fox (Green) vs Samus (Green) - Battlefield.slp")**
 * Full Windows & Linux support. OSX should also work if you run the python script directly, but this is untested.
 * 
 <img src="https://i.imgur.com/zAGVtME.png" width="200">
@@ -35,25 +36,20 @@ Works well with a multiport usb hub:
 ## CLI Usage
 
 ```
-python3 slpcopy.py --ignore-gooey --help
+$ python slpcopy.py --ignore-gooey --help
+usage: slpcopy.py [-h] [--remove_after_copy] [--use_custom_drive_names] [--rename_files] Output Path
 
-usage: slpcopy.py [-h] [--remove_after_copy] [--use_custom_drive_names]
-                  Output Path
-
-blorppppp's *.slp copy tool. Copies all *.slp files from thumbdrives onto your
-machine.
+blorppppp's *.slp copy tool. Copies all *.slp files from thumbdrives onto your machine.
 
 positional arguments:
   Output Path           The directory to copy *.slp files into.
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
-  --remove_after_copy   Delete original *.slp files off thumbdrives after
-                        succesfully copying to your machine.
+  --remove_after_copy   Delete original *.slp files off thumbdrives after succesfully copying to your machine.
   --use_custom_drive_names
-                        Copy *.slp files into a folder with each thumbdrive's
-                        custom name (if applicable). If unchecked a new folder
-                        will be created for each drive (e.g. "Setup 001")
+                        Copy *.slp files into a folder with each thumbdrive's custom name (if applicable). If unchecked a new folder will be created for each drive (e.g. "Setup 001")
+  --rename_files        Rename *.slp files into a more human readable format. "Game_20211025T160457.slp" -> "20211025T160457 - Fox (Green) vs Samus (Green) - Battlefield.slp"
 ```
 <img src="https://imgur.com/ornd613.jpg" width="900">
 
