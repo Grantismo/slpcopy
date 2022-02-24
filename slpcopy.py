@@ -1,11 +1,23 @@
+from colored import stylize, attr, fg  # depends on stdout
+import os
+import io
+import shutil
+import psutil
+import pathlib
+import humanize
+import dataclasses
+from gooey import Gooey, GooeyParser
 import sys
+import slpname
+
 in_terminal = False
 try:
     sys.stdout.write('\n')
     sys.stdout.flush()
     in_terminal = True
 except AttributeError:
-    # dummy class to export a "do nothing methods", expected methods to be called (read, write, flush, close) 
+    # dummy class to export a "do nothing methods", expected methods to be
+    # called (read, write, flush, close)
     class Dummy:
         def __getattr__(*args):
             return lambda *args: None
@@ -13,15 +25,6 @@ except AttributeError:
     for x in ('stdout', 'stderr', 'stdin'):
         setattr(sys, x, Dummy())
 
-from gooey import Gooey, GooeyParser
-import dataclasses
-import humanize
-import pathlib
-import psutil
-import shutil
-import io
-import os
-from colored import stylize, attr, fg # depends on stdout
 try:
     import win32com.client
 except BaseException:
@@ -54,25 +57,29 @@ def get_drive_names():
     if 'win32com.client' in sys.modules:
         wmi_service = win32com.client.Dispatch('WbemScripting.SWbemLocator')
         swbem_serivces = wmi_service.ConnectServer('.', 'root\\cimv2')
-        return { 
+        return {
             item.DeviceId +
             '\\': item.VolumeName for item in swbem_serivces.ExecQuery("SELECT * from Win32_LogicalDisk")}
     # Linux
     if 'dbus' in sys.modules:
         bus = dbus.SystemBus()
-        ud_manager_obj = bus.get_object('org.freedesktop.UDisks2', '/org/freedesktop/UDisks2')
-        ud_manager = dbus.Interface(ud_manager_obj, 'org.freedesktop.DBus.ObjectManager')
+        ud_manager_obj = bus.get_object(
+            'org.freedesktop.UDisks2',
+            '/org/freedesktop/UDisks2')
+        ud_manager = dbus.Interface(
+            ud_manager_obj,
+            'org.freedesktop.DBus.ObjectManager')
         device_to_names = {}
         for k, v in ud_manager.GetManagedObjects().items():
             drive_info = v.get('org.freedesktop.UDisks2.Block', {})
             label = drive_info.get('IdLabel', '')
             if label:
-                device = bytearray(drive_info.get('Device')).replace(b'\x00', b'').decode('utf-8')
+                device = bytearray(
+                    drive_info.get('Device')).replace(
+                    b'\x00', b'').decode('utf-8')
                 device_to_names[device] = label
         return device_to_names
     return {}
-
-
 
 
 def get_drives():
@@ -130,9 +137,12 @@ def resource_path(path):
     return os.path.join(datadir, path)
 
 
-def copy_and_delete_original(target_file, destination_folder, delete_original):
+def copy_and_delete_original(target_file, destination_folder, delete_original=False, rename=False):
+    destination = destination_folder
+    if rename:
+        destination = os.path.join(destination_folder, slpname.descriptive_filename(str(target_file)))
     try:
-        shutil.copy(target_file, destination_folder)
+        shutil.copy(target_file, destination)
     except IOError as e:
         print(
             stylize(
@@ -164,6 +174,82 @@ def get_folder_path(output_path, folder_name):
         folder_path.mkdir(parents=True, exist_ok=False)
     return folder_path
 
+def print_args(args):
+    print(stylize('===== Settings =====', fg('light_gray')))
+    print(
+        stylize(
+            'Remove after copy: {}'.format(
+                args.remove_after_copy),
+            fg('light_gray')))
+    print(
+        stylize(
+            'Use custom drive names: {}'.format(
+                args.use_custom_drive_names),
+            fg('light_gray')))
+    print(
+        stylize(
+            'Rename files: {}'.format(
+                args.rename_files),
+            fg('light_gray')))
+    print()
+
+def copy_files(drives, args):
+    output_path = pathlib.Path(args.output_path)
+    total_files = sum(len(d.files) for d in drives)
+    i = 0
+    cur_dir = 1
+    if not total_files:
+        print(stylize('No files to copy.', fg('dark_gray') + attr('bold')))
+    for drive in drives:
+        if not drive.files:
+            continue
+        if args.use_custom_drive_names and drive.name:
+            folder_path = get_folder_path(output_path, drive.name)
+        else:
+            folder_path, cur_dir = get_numbered_folder_path(
+                output_path, cur_dir)
+
+        successful_copies = 0
+        for f in drive.files:
+            print('progress: {}/{}'.format(i + 1, total_files))
+            sys.stdout.flush()
+            if copy_and_delete_original(
+                    f, folder_path, delete_original=args.remove_after_copy, rename=args.rename_files):
+                successful_copies += 1
+            i += 1
+        if successful_copies > 0:
+            print(
+                stylize(
+                    'Copied {} slp replay files from {} to {}'.format(
+                        successful_copies,
+                        drive.display_name(),
+                        folder_path.resolve()),
+                    fg('green')))
+            if args.remove_after_copy:
+                print(
+                    stylize(
+                        'Deleted {} replay files from {}'.format(
+                            successful_copies,
+                            drive.display_name()),
+                        fg('green')))
+        if successful_copies != len(drive.files):
+            print(stylize('Unable to copy {} files.'.format(
+                len(drive.files) - successful_copies), fg('red') + attr('bold')))
+
+def run(args):
+    drives = get_drives()
+    if drives:
+        print(stylize(
+            'Searching {} connected drives for *.slp files.'.format(len(drives)), attr('bold')))
+    else:
+        print(
+            stylize(
+                'No conncted drives to search.',
+                fg('dark_gray') +
+                attr('bold')))
+    copy_files(drives, args)
+    print(stylize('Complete.\n\n', fg('green') + attr('bold')))
+
 
 @Gooey(program_name='SlpCopy',
        progress_regex=r'^progress: (?P<current>\d+)/(?P<total>\d+)$',
@@ -172,7 +258,7 @@ def get_folder_path(output_path, folder_name):
        richtext_controls=True,
        hide_progress_msg=True,
        image_dir=resource_path('img'),
-       default_size=(610, 610),
+       default_size=(610, 700),
        timing_options={
            'show_time_remaining': not in_terminal,
            'hide_time_remaining_on_complete': not in_terminal,
@@ -197,75 +283,17 @@ def main():
         help='Copy *.slp files into a folder with each thumbdrive\'s custom name (if applicable). If unchecked a new folder will be created for each drive (e.g. "Setup 001")',
         action='store_true',
         widget='BlockCheckbox')
+    parser.add_argument(
+        '--rename_files',
+        metavar='Rename files',
+        help='Rename *.slp files into a more human readable format.\n"Game_20211025T160457.slp" -> "20211025T160457 - Fox (Green) vs Samus (Green) - Battlefield.slp"',
+        action='store_true',
+        widget='BlockCheckbox')
 
     args = parser.parse_args()
-    print(stylize('===== Settings =====', fg('light_gray')))
-    print(
-        stylize(
-            'Remove after copy: {}'.format(
-                args.remove_after_copy),
-            fg('light_gray')))
-    print(
-        stylize(
-            'Use custom drive names: {}'.format(
-                args.use_custom_drive_names),
-            fg('light_gray')))
-    print()
+    print_args(args)
+    run(args)
 
-    drives = get_drives()
-    if drives:
-        print(stylize(
-            'Searching {} connected drives for *.slp files.'.format(len(drives)), attr('bold')))
-    else:
-        print(
-            stylize(
-                'No conncted drives to search.',
-                fg('dark_gray') +
-                attr('bold')))
-
-    output_path = pathlib.Path(args.output_path)
-
-    total_files = sum(len(d.files) for d in drives)
-    i = 0
-    cur_dir = 1
-    if not total_files:
-        print(stylize('No files to copy.', fg('dark_gray') + attr('bold')))
-    for drive in drives:
-        if not drive.files:
-            continue
-        if args.use_custom_drive_names and drive.name:
-            folder_path = get_folder_path(output_path, drive.name)
-        else:
-            folder_path, cur_dir = get_numbered_folder_path(
-                output_path, cur_dir)
-
-        successful_copies = 0
-        for f in drive.files:
-            print('progress: {}/{}'.format(i + 1, total_files))
-            sys.stdout.flush()
-            if copy_and_delete_original(
-                    f, folder_path, delete_original=args.remove_after_copy):
-                successful_copies += 1
-            i += 1
-        if successful_copies > 0:
-            print(
-                stylize(
-                    'Copied {} slp replay files from {} to {}'.format(
-                        successful_copies,
-                        drive.display_name(),
-                        folder_path.resolve()),
-                    fg('green')))
-            if args.remove_after_copy:
-                print(
-                    stylize(
-                        'Deleted {} replay files from {}'.format(
-                            successful_copies,
-                            drive.display_name()),
-                        fg('green')))
-        if successful_copies != len(drive.files):
-            print(stylize('Unable to copy {} files.'.format(
-                len(drive.files) - successful_copies), fg('red') + attr('bold')))
-    print(stylize('Complete.\n\n', fg('green') + attr('bold')))
 
 
 if __name__ == '__main__':
