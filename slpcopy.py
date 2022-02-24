@@ -1,4 +1,3 @@
-from colored import stylize, attr, fg  # depends on stdout
 import os
 import io
 import shutil
@@ -25,6 +24,7 @@ except AttributeError:
     for x in ('stdout', 'stderr', 'stdin'):
         setattr(sys, x, Dummy())
 
+from colored import stylize, attr, fg  # depends on stdout
 try:
     import win32com.client
 except BaseException:
