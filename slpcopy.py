@@ -136,13 +136,16 @@ def resource_path(path):
         datadir = os.path.dirname(__file__)
     return os.path.join(datadir, path)
 
+def rename_slp_file(target_path):
+    destination_name = slpname.descriptive_filename(target_path)
+    os.rename(target_path, os.path.join(os.path.dirname(target_path), destination_name))
 
 def copy_and_delete_original(target_file, destination_folder, delete_original=False, rename=False):
-    destination = destination_folder
-    if rename:
-        destination = os.path.join(destination_folder, slpname.descriptive_filename(str(target_file)))
     try:
-        shutil.copy(target_file, destination)
+        copied_path = shutil.copy2(target_file, destination_folder)
+        if rename:
+            # rename after copy for faster IO
+            rename_slp_file(copied_path)
     except IOError as e:
         print(
             stylize(
@@ -155,6 +158,7 @@ def copy_and_delete_original(target_file, destination_folder, delete_original=Fa
     if delete_original:
         target_file.unlink()
     return True
+
 
 
 def get_numbered_folder_path(output_path, cur_dir=0):
