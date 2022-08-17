@@ -59,3 +59,6 @@ https://www.youtube.com/watch?v=KiJZX-GUyak&ab_channel=YashichiSSBM
 
 ### Prevent File Explorer popup when you plug in a thumbdrive
 https://www.windowscentral.com/how-configure-autoplay-windows-10
+
+# Support me
+☕ [buy me a coffee :)](https://www.buymeacoffee.com/blorppppp)
