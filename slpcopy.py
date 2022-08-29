@@ -280,18 +280,21 @@ def main():
         metavar='Remove after copy',
         help='Delete original *.slp files off thumbdrives after succesfully copying to your machine.',
         action='store_true',
+        default=True,
         widget='BlockCheckbox')
     parser.add_argument(
         '--use_custom_drive_names',
         metavar='Use custom drive names',
         help='Copy *.slp files into a folder with each thumbdrive\'s custom name (if applicable). If unchecked a new folder will be created for each drive (e.g. "Setup 001")',
         action='store_true',
+        default=True,
         widget='BlockCheckbox')
     parser.add_argument(
         '--rename_files',
         metavar='Rename files',
         help='Rename *.slp files into a more human readable format.\n"Game_20211025T160457.slp" -> "20211025T160457 - Fox (Green) vs Samus (Green) - Battlefield.slp"',
         action='store_true',
+        default=True,
         widget='BlockCheckbox')
 
     args = parser.parse_args()
