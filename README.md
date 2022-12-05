@@ -57,6 +57,9 @@ options:
 ### How to set up Slippi replay recording on your Wii
 https://www.youtube.com/watch?v=KiJZX-GUyak&ab_channel=YashichiSSBM
 
+### Collecting replays at your local
+https://www.youtube.com/watch?v=bU9DjXsZl-4
+
 ### Prevent File Explorer popup when you plug in a thumbdrive
 https://www.windowscentral.com/how-configure-autoplay-windows-10
 
